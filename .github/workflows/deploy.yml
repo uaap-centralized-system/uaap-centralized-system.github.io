@@ -1,0 +1,43 @@
+# Publishes the app to GitHub Pages on every push to main.
+# js/config.js is not in the repo; this writes it from the SHEETS_URL repository
+# variable (Settings → Secrets and variables → Actions → Variables).
+# Without that variable the site runs in demo mode.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build site folder with config.js
+        env:
+          SHEETS_URL: ${{ vars.SHEETS_URL }}
+        run: |
+          mkdir _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
+          printf "window.UAAP_CONFIG = { sheetsUrl: '%s' };\n" "$SHEETS_URL" > _site/js/config.js
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

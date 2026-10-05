@@ -24,6 +24,18 @@ Then open http://localhost:8080.
 
 Out of the box it runs in **demo mode**: fictional sample data, saved **in that browser only**. To start over, use **Reset sample data** at the bottom of the Home screen. To share records between staff, connect Google Sheets (below).
 
+## Using it online
+
+The app is published with GitHub Pages at
+**https://johnbaptistmaglaquepersonal.github.io/uaap-centralized-system/**.
+Staff open that link on any phone or computer. It can be added to the home screen like an app.
+
+Every push to `main` republishes the site automatically (see `.github/workflows/deploy.yml`, under the repo's **Actions** tab).
+`js/config.js` is not in the repo. The workflow writes it from the repository variable **`SHEETS_URL`**
+(**Settings → Secrets and variables → Actions → Variables**). If that variable isn't set, the online app runs in demo mode.
+
+The Sheet link is visible to anyone who opens the site, so **set `STAFF_PASSCODE` in Apps Script before adding `SHEETS_URL`**.
+
 ## App structure
 
 ```
