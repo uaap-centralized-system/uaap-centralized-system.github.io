@@ -5,12 +5,13 @@ function cleanPlate(plate) {
   return plate.toUpperCase().replace(/\s+/g, ' ').trim();
 }
 
+// Remember the chosen log date while moving between parking screens.
+let parkingLogDate = null;
+
 Screens.parking = async function (el) {
   const records = await Store.listParking();
   const parkedCount = records.filter((r) => !r.timeOut).length;
-  const today = records
-    .filter((r) => r.date === todayISO())
-    .sort((a, b) => b.timeIn.localeCompare(a.timeIn));
+  if (!parkingLogDate) parkingLogDate = todayISO();
 
   el.innerHTML = `
     <div class="big-actions">
@@ -22,9 +23,12 @@ Screens.parking = async function (el) {
     </div>
 
     <section class="card card--flush">
-      <div class="card-head">
-        <h2>Today's Parking Log</h2>
-        <p class="hint">Saved records can't be changed, only deleted.</p>
+      <div class="card-head card-head--stack">
+        <div>
+          <h2>Parking Log</h2>
+          <p class="hint">Saved records can't be changed, only deleted.</p>
+        </div>
+        ${dateFilterHtml('pk-date', parkingLogDate, 'Show date')}
       </div>
       <table class="table table--stack">
         <thead>
@@ -33,36 +37,53 @@ Screens.parking = async function (el) {
             <th><span class="sr-only">Delete</span></th>
           </tr>
         </thead>
-        <tbody>
-          ${today.length ? today.map((r) => `
-            <tr>
-              <td data-label="Plate"><span class="plate plate--small">${esc(r.plateNumber)}</span></td>
-              <td data-label="Name">${esc(r.name)}</td>
-              <td data-label="Time In">${esc(formatTime(r.timeIn))}</td>
-              <td data-label="Time Out">${r.timeOut
-                ? esc(formatTime(r.timeOut))
-                : '<span class="badge badge--green">Still parked</span>'}</td>
-              <td data-label="Admin Staff">${esc(r.adminStaff)}</td>
-              <td data-label="Notes">${esc(r.notes) || '<span class="muted">—</span>'}</td>
-              <td class="cell-action">
-                <button type="button" class="btn btn-danger-outline btn-small" data-delete="${esc(r.parkingRecordId)}">Delete</button>
-              </td>
-            </tr>`).join('')
-          : '<tr><td colspan="7" class="empty">No vehicles recorded today yet.</td></tr>'}
-        </tbody>
+        <tbody id="pk-rows"></tbody>
       </table>
     </section>`;
 
-  el.querySelector('tbody').addEventListener('click', async (e) => {
+  const tbody = el.querySelector('#pk-rows');
+  let shown = [];
+
+  function update() {
+    shown = records
+      .filter((r) => r.date === parkingLogDate)
+      .sort((a, b) => b.timeIn.localeCompare(a.timeIn));
+    const when = parkingLogDate === todayISO() ? 'today' : `on ${formatDate(parkingLogDate)}`;
+    tbody.innerHTML = shown.length
+      ? shown.map((r) => `
+        <tr>
+          <td data-label="Plate"><span class="plate plate--small">${esc(r.plateNumber)}</span></td>
+          <td data-label="Name">${esc(r.name)}</td>
+          <td data-label="Time In">${esc(formatTime(r.timeIn))}</td>
+          <td data-label="Time Out">${r.timeOut
+            ? esc(formatTime(r.timeOut))
+            : '<span class="badge badge--green">Still parked</span>'}</td>
+          <td data-label="Admin Staff">${esc(r.adminStaff)}</td>
+          <td data-label="Notes">${esc(r.notes) || '<span class="muted">—</span>'}</td>
+          <td class="cell-action">
+            <button type="button" class="btn btn-danger-outline btn-small" data-delete="${esc(r.parkingRecordId)}">Delete</button>
+          </td>
+        </tr>`).join('')
+      : `<tr><td colspan="7" class="empty">${parkingLogDate ? `No vehicles recorded ${esc(when)}.` : 'Choose a date.'}</td></tr>`;
+  }
+
+  bindDateFilter(el, 'pk-date', (date) => {
+    parkingLogDate = date;
+    update();
+  });
+
+  tbody.addEventListener('click', async (e) => {
     const button = e.target.closest('button[data-delete]');
     if (!button) return;
-    const r = today.find((x) => x.parkingRecordId === button.dataset.delete);
+    const r = shown.find((x) => x.parkingRecordId === button.dataset.delete);
     if (!confirm(`Delete the parking record for ${r.plateNumber} (${r.name})? This can't be undone.`)) return;
     const done = await withSaving(button, () => Store.deleteParking(r.parkingRecordId).then(() => true));
     if (!done) return;
     toast(`${r.plateNumber} record deleted.`);
     await Screens.parking(el);
   });
+
+  update();
 };
 
 Screens.vehicleIn = async function (el) {
@@ -147,7 +168,7 @@ Screens.vehicleIn = async function (el) {
           <div><dt>Record ID</dt><dd>${esc(saved.parkingRecordId)}</dd></div>
         </dl>
         <p class="hint">This record is saved. When the vehicle leaves, use <strong>Vehicle Out</strong>.
-          If something is wrong, delete it from Today's Parking Log and check in again.</p>
+          If something is wrong, delete it from the Parking Log and check in again.</p>
         <div class="form-actions">
           <a class="btn btn-secondary" href="#/parking">Back to Parking</a>
           <button type="button" class="btn btn-in" id="another">${icon('logIn')} Check In Another</button>

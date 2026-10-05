@@ -383,3 +383,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--n
 .danger-zone { border-top: 1px solid var(--border); padding-top: 16px; }
 .passcode-form { margin: 24px auto; }
 .passcode-form h2 { font-size: 1.4rem; }
+
+.date-filter { display: flex; gap: 8px; }
+.date-filter input { flex: 1; min-width: 0; }
+.date-filter .btn { flex: 0 0 auto; padding: 0 16px; }
+.card-head .date-filter { max-width: 340px; }
+.card-head--stack { align-items: flex-end; gap: 12px; }

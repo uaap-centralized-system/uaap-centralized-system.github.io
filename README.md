@@ -56,7 +56,7 @@ Dates are stored as `YYYY-MM-DD` and times as 24-hour `HH:MM`. IDs look like `P-
 ### Rules built into the prototype
 
 - One food row = one pickup by one representative for their whole team. Quantity is the team's total pieces.
-- Any record can be deleted from the app, after a confirmation: people from their Edit screen, food entries from the Food Summary, parking records from Today's Parking Log. Deleted IDs are never reused.
+- Any record can be deleted from the app, after a confirmation: people from their Edit screen, food entries from the Food Summary, parking records from the Parking Log. Deleted IDs are never reused.
 - Food and parking records can't be edited after saving. The only change to a parking record is Check Out, which sets Time Out **on the same record**.
 - Vehicle Out lists only vehicles with a blank Time Out. A plate that's already parked can't be checked in again.
 
@@ -98,7 +98,8 @@ The Sheet is connected through a small Google Apps Script web app, [`google-apps
 - Food: entry form with required-field checks. Date, sport and staff carry over to the next entry.
 - Food Summary: Breakfast / Lunch / Dinner / overall totals by date and sport
 - Compiled Food Form: one signature box (finger or mouse) and a **Print Form** button
-- Parking: Vehicle In (time defaults to now), Vehicle Out cards with Check Out, today's parking log
+- Parking: Vehicle In (time defaults to now), Vehicle Out cards with Check Out, parking log by date
+- Screens open on today's data (Food Summary, Parking Log) or the current month (Masterlist), with a date picker and a Today button
 - Works on phones, tablets and desktops. Sample data included.
 - Optional Google Sheets backend so all staff share the same records, protected by a staff passcode
 - Delete for all three modules, with confirmation

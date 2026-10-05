@@ -114,10 +114,7 @@ Screens.foodSummary = async function (el) {
 
   el.innerHTML = `
     <div class="filters card no-print">
-      <div class="field">
-        <label for="fs-date">Date</label>
-        <input id="fs-date" type="date" value="${esc(f.date)}">
-      </div>
+      ${dateFilterHtml('fs-date', f.date)}
       <div class="field">
         <label for="fs-sport">Sport</label>
         <select id="fs-sport">${optionsHtml(OPTIONS.sports, f.sport, 'All sports')}</select>
@@ -125,7 +122,7 @@ Screens.foodSummary = async function (el) {
     </div>
     <div id="fs-body"></div>`;
 
-  const dateInput = el.querySelector('#fs-date');
+  const dateInput = bindDateFilter(el, 'fs-date', () => update());
   const sportSelect = el.querySelector('#fs-sport');
   const body = el.querySelector('#fs-body');
 
@@ -239,7 +236,6 @@ Screens.foodSummary = async function (el) {
     update();
   });
 
-  dateInput.addEventListener('change', update);
   sportSelect.addEventListener('change', update);
   update();
 };

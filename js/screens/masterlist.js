@@ -1,7 +1,8 @@
 window.Screens = window.Screens || {};
 
 // Remember the search and filters while moving between list and edit screens.
-const masterlistFilters = { search: '', sport: '', period: '' };
+// Starts on the current month so the list isn't everyone ever entered.
+const masterlistFilters = { search: '', sport: '', period: toISOMonth(new Date()) };
 
 /** Months to choose from: 3 months back to 6 months ahead, plus `current` if outside that range. */
 function periodChoices(current) {
@@ -14,7 +15,7 @@ function periodChoices(current) {
 
 Screens.masterlist = async function (el) {
   const people = await Store.listPeople();
-  const periods = [...new Set(people.map((p) => p.period))].sort().reverse();
+  const periods = [...new Set(people.map((p) => p.period).concat(toISOMonth(new Date())))].sort().reverse();
   const f = masterlistFilters;
 
   el.innerHTML = `

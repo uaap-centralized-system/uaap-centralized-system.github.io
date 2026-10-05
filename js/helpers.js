@@ -107,6 +107,29 @@ function icon(name) {
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
 }
 
+/** A date picker with a "Today" button next to it. Wire it up with bindDateFilter(). */
+function dateFilterHtml(id, value, label = 'Date') {
+  return `
+    <div class="field">
+      <label for="${id}">${esc(label)}</label>
+      <div class="date-filter">
+        <input id="${id}" type="date" value="${esc(value)}">
+        <button type="button" class="btn btn-secondary" data-today-for="${id}">Today</button>
+      </div>
+    </div>`;
+}
+
+/** Calls onChange(date) when the date changes or Today is pressed. */
+function bindDateFilter(root, id, onChange) {
+  const input = root.querySelector(`#${id}`);
+  input.addEventListener('change', () => onChange(input.value));
+  root.querySelector(`[data-today-for="${id}"]`).addEventListener('click', () => {
+    input.value = todayISO();
+    onChange(input.value);
+  });
+  return input;
+}
+
 // ---------- Forms ----------
 
 /** All form values as a plain object, with text trimmed. */
