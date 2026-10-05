@@ -28,7 +28,9 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- Load order matters: helpers → data → store → screens → app (router) -->
+  <!-- Load order matters: config → helpers → data → store → screens → app (router) -->
+  <!-- js/config.js is optional; without it, records stay in this browser. -->
+  <script src="js/config.js"></script>
   <script src="js/helpers.js"></script>
   <script src="js/sample-data.js"></script>
   <script src="js/store.js"></script>

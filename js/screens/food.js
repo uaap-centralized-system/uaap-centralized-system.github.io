@@ -90,8 +90,7 @@ Screens.foodEntry = async function (el) {
     }
     if (!showErrors(form, errors)) return;
 
-    form.querySelector('[type=submit]').disabled = true;
-    const saved = await Store.addFood({
+    const saved = await withSaving(form.querySelector('[type=submit]'), () => Store.addFood({
       date: data.date,
       sport: data.sport,
       department: data.department,
@@ -100,7 +99,8 @@ Screens.foodEntry = async function (el) {
       quantity: Number(data.quantity),
       adminStaff: data.adminStaff,
       notes: data.notes,
-    });
+    }));
+    if (!saved) return;
     foodEntryDefaults = { date: saved.date, sport: saved.sport, adminStaff: saved.adminStaff };
     toast(`Saved: ${saved.quantity} ${saved.meal} for ${saved.department}.`);
     await Screens.foodEntry(el); // fresh form for the next team

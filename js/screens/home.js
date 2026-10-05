@@ -22,12 +22,14 @@ Screens.home = function (el) {
         </a>
       </div>
       <p class="demo-note">
-        Prototype: records are saved in this browser only.
-        <button type="button" class="link-button" id="reset-data">Reset sample data</button>
+        ${Store.usingSheets
+          ? 'Records are saved to the shared Google Sheet.'
+          : `Demo mode: records are saved in this browser only.
+             <button type="button" class="link-button" id="reset-data">Reset sample data</button>`}
       </p>
     </section>`;
 
-  el.querySelector('#reset-data').addEventListener('click', async () => {
+  el.querySelector('#reset-data')?.addEventListener('click', async () => {
     if (!confirm('Erase all changes and go back to the sample data?')) return;
     await Store.resetToSampleData();
     toast('Sample data restored.');

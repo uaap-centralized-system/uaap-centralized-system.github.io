@@ -22,7 +22,7 @@ python3 -m http.server 8080
 
 Then open http://localhost:8080.
 
-The app starts with fictional sample data. Records you add are saved **in that browser only**. To start over, use **Reset sample data** at the bottom of the Home screen.
+Out of the box it runs in **demo mode**: fictional sample data, saved **in that browser only**. To start over, use **Reset sample data** at the bottom of the Home screen. To share records between staff, connect Google Sheets (below).
 
 ## App structure
 
@@ -31,12 +31,14 @@ index.html               Page shell: header, Back button, screen area
 css/styles.css           All styling (large text, mobile layout, print layout)
 js/helpers.js            Date/time formatting, form helpers, icons, messages
 js/sample-data.js        Dropdown choices (sports, departments, staff, meals) + sample records
-js/store.js              DATA LAYER: every read/write goes through here
+js/config.example.js     Copy to js/config.js and add the Google Sheets URL
+js/store.js              DATA LAYER: every read/write goes through here (Sheets or browser)
 js/screens/home.js       Home: Masterlist / Food / Parking
 js/screens/masterlist.js Search, filters, Add / Edit person
 js/screens/food.js       Food menu, New Food Entry, Food Summary + Compiled Food Form
 js/screens/parking.js    Parking menu + today's log, Vehicle In, Vehicle Out
 js/app.js                Router: which screen shows for each address (#/food/new, etc.)
+google-apps-script/Code.gs  Backend that runs inside the Google Sheet
 ```
 
 To **change dropdown choices** (add a sport, department or staff member), edit `OPTIONS` in `js/sample-data.js`.
@@ -58,22 +60,34 @@ Dates are stored as `YYYY-MM-DD` and times as 24-hour `HH:MM`. IDs look like `P-
 - A parking record can't be edited after saving. The only change allowed is Check Out, which sets Time Out **on the same record**.
 - Vehicle Out lists only vehicles with a blank Time Out. A plate that's already parked can't be checked in again.
 
-These rules are enforced in `js/store.js` and in the screens. Real security, meaning server-side, needs a backend (see below).
+These rules are enforced in the screens, in `js/store.js`, and on the Google Sheets side in `Code.gs`.
 
-## Adding Google Sheets later
+## Google Sheets setup
 
-All data access is in **`js/store.js`**, and every function there is already `async`. Moving to Google Sheets means rewriting that one file. The screens don't change.
+The app has two modes:
 
-Suggested approach (free, no server to host):
+- **Demo mode** (default): records are saved in the browser only, starting from sample data.
+- **Google Sheets mode**: all staff read and write the same Google Sheet. This is on when `js/config.js` has a `sheetsUrl`.
 
-1. Create a Google Sheet with three tabs: `Masterlist`, `Food`, `Parking`. Put the field names from the table above in row 1 as column headers.
-2. In the Sheet, open **Extensions → Apps Script** and write a small web app:
-   - `doGet(e)` returns a tab's rows as JSON (e.g. `?table=Food`).
-   - `doPost(e)` handles `add`, `updatePerson` and `checkOut` actions. The checkout handler should only fill Time Out if it's blank, so the parking rule holds on the server too.
-3. **Deploy → New deployment → Web app** and copy the URL.
-4. In `js/store.js`, replace each function body with a `fetch()` to that URL. For example, `listFood()` becomes `fetch(URL + '?table=Food').then(r => r.json())`.
+The Sheet is connected through a small Google Apps Script web app, [`google-apps-script/Code.gs`](google-apps-script/Code.gs). It needs no server and no Google Cloud project.
 
-This prototype doesn't use Sheets yet because a working demo without Google sign-in setup was the priority.
+1. Create a new Google Sheet, e.g. "UAAP Centralized System Data".
+2. In the Sheet, open **Extensions → Apps Script**. Delete the starter code and paste in all of `google-apps-script/Code.gs`. Save.
+3. Pick **setup** in the function dropdown at the top and click **Run**. Google asks you to authorize the script: choose your account, then **Advanced → Go to (project name) → Allow**. This creates the `Masterlist`, `Food` and `Parking` tabs.
+4. Click **Deploy → New deployment**. Choose type **Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and copy the **Web app URL**.
+5. Copy `js/config.example.js` to `js/config.js` and paste the URL into `sheetsUrl`.
+6. Reload the app. The Home screen should say "Records are saved to the shared Google Sheet."
+
+**If you change `Code.gs` later:** paste the new version, then **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.
+
+**Security note:** with "Anyone" access, whoever has the web app URL can read and add records, but not delete them. Only share the URL (and `js/config.js`) with UAAP staff. That's why `js/config.js` is not committed to git. Real staff logins are listed under future improvements.
+
+### How the pieces fit
+
+- `js/store.js` is the only file that talks to the data. It picks Google Sheets or the browser from `js/config.js`. The screens never know which one is in use.
+- `Code.gs` enforces the same rules as the app: no deletes, food and parking records can't be edited, and Check Out only fills a blank Time Out. These rules hold even if someone calls the URL directly.
+- All Sheet cells are stored as plain text, so Sheets never turns `2026-10` or `08:30` into dates.
+- You can read the Sheet freely, but avoid editing it by hand while staff are using the app, and keep the header row exactly as it is.
 
 ## MVP vs. future improvements
 
@@ -85,9 +99,9 @@ This prototype doesn't use Sheets yet because a working demo without Google sign
 - Compiled Food Form: one signature box (finger or mouse) and a **Print Form** button
 - Parking: Vehicle In (time defaults to now), Vehicle Out cards with Check Out, today's parking log
 - Works on phones, tablets and desktops. Sample data included.
+- Optional Google Sheets backend so all staff share the same records
 
 **Future improvements**
-- Google Sheets (or another shared database) so all staff see the same records
 - Staff login and roles (e.g. only Masterlist staff can edit the Masterlist)
 - Saving the food signature with the form, instead of only printing it
 - Export to Excel/PDF and month-end reports

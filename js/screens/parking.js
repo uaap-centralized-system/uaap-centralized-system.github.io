@@ -108,15 +108,15 @@ Screens.vehicleIn = async function (el) {
     }
     if (!showErrors(form, errors)) return;
 
-    form.querySelector('[type=submit]').disabled = true;
-    const saved = await Store.addVehicleIn({
+    const saved = await withSaving(form.querySelector('[type=submit]'), () => Store.addVehicleIn({
       date: data.date,
       name: data.name,
       plateNumber: data.plateNumber,
       timeIn: data.timeIn,
       adminStaff: data.adminStaff,
       notes: data.notes,
-    });
+    }));
+    if (!saved) return;
 
     el.innerHTML = `
       <div class="card success">
@@ -140,10 +140,15 @@ Screens.vehicleIn = async function (el) {
   });
 };
 
-Screens.vehicleOut = async function (el) {
-  let parked = (await Store.listParking())
+/** Vehicles still parked (no Time Out), longest-parked first. */
+async function loadParked() {
+  return (await Store.listParking())
     .filter((r) => !r.timeOut)
     .sort((a, b) => (a.date + a.timeIn).localeCompare(b.date + b.timeIn));
+}
+
+Screens.vehicleOut = async function (el) {
+  let parked = await loadParked();
   const today = todayISO();
 
   el.innerHTML = `
@@ -187,13 +192,16 @@ Screens.vehicleOut = async function (el) {
     if (!confirm(`Check out ${record.plateNumber} (${record.name})?`)) return;
 
     button.disabled = true;
+    button.textContent = 'Checking out…';
     try {
       const saved = await Store.checkOutVehicle(record.parkingRecordId, nowTime());
       toast(`${saved.plateNumber} checked out at ${formatTime(saved.timeOut)}.`);
+      parked = parked.filter((r) => r.parkingRecordId !== record.parkingRecordId);
     } catch (err) {
+      // Maybe someone else checked it out, or the connection dropped: show the real list.
       toast(err.message);
+      parked = await loadParked().catch(() => parked);
     }
-    parked = parked.filter((r) => r.parkingRecordId !== record.parkingRecordId);
     update();
   });
 

@@ -138,6 +138,26 @@ function showErrors(form, errors) {
   return Object.keys(errors).length === 0;
 }
 
+/**
+ * Run a save with the button showing "Saving…". If it fails (e.g. no internet),
+ * show the problem and give the button back so staff can try again.
+ * Returns the result, or null if it failed.
+ */
+async function withSaving(button, work) {
+  const label = button.innerHTML;
+  button.disabled = true;
+  button.textContent = 'Saving…';
+  try {
+    return await work();
+  } catch (err) {
+    console.error(err);
+    toast(err.message || 'Could not save. Please try again.');
+    button.disabled = false;
+    button.innerHTML = label;
+    return null;
+  }
+}
+
 // ---------- Messages ----------
 
 function toast(message) {

@@ -34,13 +34,14 @@ async function render() {
   document.title = isHome ? 'UAAP Centralized System' : `${route.title} · UAAP Centralized System`;
 
   const main = document.getElementById('main');
-  main.innerHTML = '';
+  main.innerHTML = '<p class="loading">Loading…</p>';
   window.scrollTo(0, 0);
   try {
     await route.screen(main, ...path.match(route.pattern).slice(1));
   } catch (err) {
     console.error(err);
-    main.innerHTML = '<div class="card notice notice--error">Something went wrong. Please go back and try again.</div>';
+    main.innerHTML = `<div class="card notice notice--error">${esc(err.message || 'Something went wrong.')}
+      Please go back and try again.</div>`;
   }
 }
 

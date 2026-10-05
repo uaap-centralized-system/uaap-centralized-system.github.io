@@ -1,0 +1,172 @@
+/**
+ * UAAP Centralized System: Google Sheets backend.
+ *
+ * Paste this whole file into the Sheet's Apps Script editor
+ * (Extensions → Apps Script), run `setup` once, then deploy as a Web app.
+ * See README.md → "Google Sheets setup".
+ *
+ * The app talks to this script only through:
+ *   GET  ?table=masterlist|food|parking        → { ok, rows }
+ *   POST { action: 'add', table, data }        → { ok, record }
+ *   POST { action: 'updatePerson', id, data }  → { ok, record }
+ *   POST { action: 'checkOut', id, timeOut }   → { ok, record }
+ *
+ * Rules enforced here, so they hold even if someone bypasses the app:
+ *  - Nothing can be deleted.
+ *  - Food and parking records can't be edited after saving.
+ *  - Check Out only fills a blank Time Out on the same parking record.
+ */
+
+const TABLES = {
+  masterlist: {
+    tab: 'Masterlist', idField: 'personId', idPrefix: 'P',
+    columns: ['personId', 'fullName', 'organization', 'sport', 'period', 'active'],
+  },
+  food: {
+    tab: 'Food', idField: 'foodRecordId', idPrefix: 'F',
+    columns: ['foodRecordId', 'date', 'sport', 'department', 'representativeName',
+      'meal', 'quantity', 'adminStaff', 'notes'],
+  },
+  parking: {
+    tab: 'Parking', idField: 'parkingRecordId', idPrefix: 'PK',
+    columns: ['parkingRecordId', 'date', 'name', 'plateNumber', 'timeIn', 'timeOut',
+      'adminStaff', 'notes'],
+  },
+};
+
+/** Run once from the editor: creates the three tabs with headers. Safe to run again. */
+function setup() {
+  const ss = SpreadsheetApp.getActive();
+  Object.keys(TABLES).forEach((key) => {
+    const t = TABLES[key];
+    const sheet = ss.getSheetByName(t.tab) || ss.insertSheet(t.tab);
+    // Plain text everywhere, so Sheets never turns "2026-10" or "08:30" into dates/times.
+    sheet.getRange(1, 1, sheet.getMaxRows(), t.columns.length).setNumberFormat('@');
+    sheet.getRange(1, 1, 1, t.columns.length).setValues([t.columns]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  });
+  const blank = ss.getSheetByName('Sheet1');
+  if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
+}
+
+function doGet(e) {
+  return respond(() => ({ rows: readRows(tableFor(e.parameter.table)) }));
+}
+
+function doPost(e) {
+  return respond(() => {
+    const body = JSON.parse(e.postData.contents);
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000); // one save at a time, so IDs never collide
+    try {
+      if (body.action === 'add') return { record: addRow(tableFor(body.table), body.data) };
+      if (body.action === 'updatePerson') return { record: updatePerson(body.id, body.data) };
+      if (body.action === 'checkOut') return { record: checkOut(body.id, body.timeOut) };
+      throw new Error('Unknown action: ' + body.action);
+    } finally {
+      lock.releaseLock();
+    }
+  });
+}
+
+// ---------- Helpers ----------
+
+function respond(work) {
+  let result;
+  try {
+    result = Object.assign({ ok: true }, work());
+  } catch (err) {
+    result = { ok: false, error: err.message };
+  }
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function tableFor(name) {
+  const t = TABLES[name];
+  if (!t) throw new Error('Unknown table: ' + name);
+  return t;
+}
+
+function sheetFor(t) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(t.tab);
+  if (!sheet) throw new Error('Missing "' + t.tab + '" tab. Run setup() in the Apps Script editor.');
+  return sheet;
+}
+
+/** Turn a row of cell text into a record with the right types. */
+function toRecord(t, values) {
+  const record = {};
+  t.columns.forEach((col, i) => { record[col] = values[i]; });
+  if ('active' in record) record.active = String(record.active).toUpperCase() === 'TRUE';
+  if ('quantity' in record) record.quantity = Number(record.quantity) || 0;
+  return record;
+}
+
+function readRows(t) {
+  const sheet = sheetFor(t);
+  const last = sheet.getLastRow();
+  if (last < 2) return [];
+  return sheet.getRange(2, 1, last - 1, t.columns.length).getDisplayValues()
+    .filter((values) => values[0] !== '')
+    .map((values) => toRecord(t, values));
+}
+
+/** Row number (2+) of the record with this ID, or -1. */
+function findRow(t, id) {
+  const sheet = sheetFor(t);
+  const last = sheet.getLastRow();
+  if (last < 2) return -1;
+  const ids = sheet.getRange(2, 1, last - 1, 1).getDisplayValues();
+  const i = ids.findIndex((r) => r[0] === id);
+  return i === -1 ? -1 : i + 2;
+}
+
+function writeRow(t, rowNumber, record) {
+  const sheet = sheetFor(t);
+  if (rowNumber > sheet.getMaxRows()) sheet.insertRowsAfter(sheet.getMaxRows(), rowNumber - sheet.getMaxRows());
+  const values = t.columns.map((col) => {
+    const v = record[col];
+    if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+    return v === undefined || v === null ? '' : String(v);
+  });
+  sheet.getRange(rowNumber, 1, 1, values.length).setNumberFormat('@').setValues([values]);
+}
+
+function nextId(t) {
+  const max = readRows(t).reduce((highest, r) => {
+    const n = parseInt(String(r[t.idField]).split('-')[1], 10);
+    return isNaN(n) ? highest : Math.max(highest, n);
+  }, 0);
+  return t.idPrefix + '-' + ('000' + (max + 1)).slice(-4);
+}
+
+function addRow(t, data) {
+  const record = Object.assign({}, data);
+  record[t.idField] = nextId(t);
+  if (t === TABLES.parking) record.timeOut = ''; // check-in never sets Time Out
+  writeRow(t, sheetFor(t).getLastRow() + 1, record);
+  return toRecord(t, t.columns.map((col) => record[col]));
+}
+
+function updatePerson(id, data) {
+  const t = TABLES.masterlist;
+  const row = findRow(t, id);
+  if (row === -1) throw new Error('This person could not be found.');
+  const current = toRecord(t, sheetFor(t).getRange(row, 1, 1, t.columns.length).getDisplayValues()[0]);
+  const record = Object.assign(current, data, { personId: id });
+  writeRow(t, row, record);
+  return record;
+}
+
+function checkOut(id, timeOut) {
+  const t = TABLES.parking;
+  const row = findRow(t, id);
+  if (row === -1) throw new Error('This parking record could not be found.');
+  const record = toRecord(t, sheetFor(t).getRange(row, 1, 1, t.columns.length).getDisplayValues()[0]);
+  if (record.timeOut) throw new Error(record.plateNumber + ' was already checked out.');
+  if (!timeOut) throw new Error('Time Out is missing.');
+  record.timeOut = timeOut;
+  writeRow(t, row, record);
+  return record;
+}

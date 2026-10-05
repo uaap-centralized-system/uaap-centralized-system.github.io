@@ -159,14 +159,11 @@ Screens.masterlistForm = async function (el, personId) {
       period: data.period,
       active: data.active === 'yes',
     };
-    form.querySelector('[type=submit]').disabled = true;
-    if (isEdit) {
-      await Store.updatePerson(person.personId, record);
-      toast(`Changes to ${record.fullName} saved.`);
-    } else {
-      await Store.addPerson(record);
-      toast(`${record.fullName} added to the Masterlist.`);
-    }
+    const saved = await withSaving(form.querySelector('[type=submit]'), () => (
+      isEdit ? Store.updatePerson(person.personId, record) : Store.addPerson(record)
+    ));
+    if (!saved) return;
+    toast(isEdit ? `Changes to ${saved.fullName} saved.` : `${saved.fullName} added to the Masterlist.`);
     location.hash = '#/masterlist';
   });
 };
