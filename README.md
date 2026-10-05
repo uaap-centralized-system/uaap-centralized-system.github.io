@@ -27,7 +27,8 @@ Out of the box it runs in **demo mode**: fictional sample data, saved **in that 
 ## Using it online
 
 The app is published with GitHub Pages at
-**https://johnbaptistmaglaquepersonal.github.io/uaap-centralized-system/**.
+**https://uaap-centralized-system.github.io/**
+(repo: [uaap-centralized-system/uaap-centralized-system.github.io](https://github.com/uaap-centralized-system/uaap-centralized-system.github.io)).
 Staff open that link on any phone or computer. It can be added to the home screen like an app.
 
 Every push to `main` republishes the site automatically (see `.github/workflows/deploy.yml`, under the repo's **Actions** tab).
