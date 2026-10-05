@@ -377,3 +377,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--n
 }
 
 .loading { color: var(--muted); text-align: center; padding: 48px 16px; }
+
+.btn-danger-outline { background: var(--surface); color: var(--red); border-color: #f1c4bf; }
+.btn-danger-outline:hover { border-color: var(--red); background: #fdf1f0; }
+.danger-zone { border-top: 1px solid var(--border); padding-top: 16px; }
+.passcode-form { margin: 24px auto; }
+.passcode-form h2 { font-size: 1.4rem; }

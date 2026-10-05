@@ -138,9 +138,21 @@ Screens.masterlistForm = async function (el, personId) {
         <a class="btn btn-secondary" href="#/masterlist">Cancel</a>
         <button class="btn btn-primary" type="submit">${icon('check')} Save</button>
       </div>
+      ${isEdit ? `
+      <div class="danger-zone">
+        <button type="button" class="btn btn-danger-outline" id="delete-person">${icon('trash')} Delete Person</button>
+      </div>` : ''}
     </form>`;
 
   const form = el.querySelector('form');
+  el.querySelector('#delete-person')?.addEventListener('click', async (e) => {
+    if (!confirm(`Delete ${person.fullName} (${person.personId}) from the Masterlist? This can't be undone.`)) return;
+    const done = await withSaving(e.currentTarget, () => Store.deletePerson(person.personId).then(() => true));
+    if (!done) return;
+    toast(`${person.fullName} deleted.`);
+    location.hash = '#/masterlist';
+  });
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = readForm(form);

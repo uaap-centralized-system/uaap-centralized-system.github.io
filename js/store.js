@@ -6,8 +6,8 @@
  *  - this browser (localStorage), starting from the sample data (demo mode).
  *
  * Rules enforced here and in google-apps-script/Code.gs (not just in the screens):
- *  - Food and parking records can never be deleted.
- *  - A parking record can only change once: setting Time Out at check-out.
+ *  - Food and parking records can be deleted but not edited.
+ *  - The only change to a parking record is setting Time Out at check-out.
  */
 const Store = (function () {
   const TABLES = {
@@ -16,33 +16,55 @@ const Store = (function () {
     parking: { idField: 'parkingRecordId', idPrefix: 'PK' },
   };
   const sheetsUrl = ((window.UAAP_CONFIG || {}).sheetsUrl || '').trim();
+
+  // The staff passcode is entered once per device and remembered in this browser.
+  const Passcode = (function () {
+    const KEY = 'uaap-centralized:passcode';
+    let memory = '';
+    return {
+      get() {
+        try { return localStorage.getItem(KEY) || memory; } catch (e) { return memory; }
+      },
+      set(value) {
+        memory = value;
+        try {
+          if (value) localStorage.setItem(KEY, value);
+          else localStorage.removeItem(KEY);
+        } catch (e) { /* kept in memory for this visit */ }
+      },
+    };
+  })();
   const backend = sheetsUrl ? sheetsBackend(sheetsUrl) : browserBackend();
 
   // ---------- Google Sheets (via the Apps Script web app) ----------
 
   function sheetsBackend(url) {
-    async function call(fullUrl, options) {
+    async function post(request) {
       let response;
       try {
-        response = await fetch(fullUrl, options);
+        response = await fetch(url, {
+          method: 'POST',
+          // text/plain avoids a CORS preflight request, which Apps Script can't answer.
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ ...request, passcode: Passcode.get() }),
+        });
       } catch (e) {
         throw new Error('Could not reach the Google Sheet. Check the internet connection and try again.');
       }
       const result = await response.json().catch(() => ({ ok: false }));
+      if (result.code === 'passcode') {
+        Passcode.set('');
+        const err = new Error('Please enter the staff passcode.');
+        err.needsPasscode = true;
+        throw err;
+      }
       if (!result.ok) throw new Error(result.error || 'The Google Sheet returned an error. Please try again.');
       return result;
     }
 
-    // text/plain avoids a CORS preflight request, which Apps Script can't answer.
-    const post = (request) => call(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(request),
-    });
-
     return {
       async list(table) {
-        return (await call(`${url}?table=${table}`)).rows;
+        return (await post({ action: 'list', table })).rows;
       },
       async add(table, data) {
         return (await post({ action: 'add', table, data })).record;
@@ -52,6 +74,9 @@ const Store = (function () {
       },
       async checkOut(id, timeOut) {
         return (await post({ action: 'checkOut', id, timeOut })).record;
+      },
+      async remove(table, id) {
+        await post({ action: 'delete', table, id });
       },
     };
   }
@@ -130,6 +155,14 @@ const Store = (function () {
         writeTable('parking');
         return { ...row };
       },
+      async remove(table, id) {
+        const { idField } = TABLES[table];
+        const rows = readTable(table);
+        const i = rows.findIndex((row) => row[idField] === id);
+        if (i === -1) throw new Error('This record could not be found. It may already be deleted.');
+        rows.splice(i, 1);
+        writeTable(table);
+      },
       async reset() {
         Object.keys(TABLES).forEach((table) => {
           delete cache[table];
@@ -154,16 +187,22 @@ const Store = (function () {
     },
     addPerson: (data) => backend.add('masterlist', data),
     updatePerson: (personId, data) => backend.updatePerson(personId, data),
+    deletePerson: (personId) => backend.remove('masterlist', personId),
 
     // Food
     listFood: () => backend.list('food'),
     addFood: (data) => backend.add('food', data),
+    deleteFood: (foodRecordId) => backend.remove('food', foodRecordId),
 
     // Parking
     listParking: () => backend.list('parking'),
     addVehicleIn: (data) => backend.add('parking', { ...data, timeOut: '' }),
     /** Sets Time Out on the same record. Nothing else can be changed. */
     checkOutVehicle: (parkingRecordId, timeOut) => backend.checkOut(parkingRecordId, timeOut),
+    deleteParking: (parkingRecordId) => backend.remove('parking', parkingRecordId),
+
+    /** Remember the staff passcode on this device. */
+    setPasscode: (value) => Passcode.set(value),
 
     /** Demo mode only: go back to the sample data. */
     async resetToSampleData() {

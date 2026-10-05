@@ -39,10 +39,40 @@ async function render() {
   try {
     await route.screen(main, ...path.match(route.pattern).slice(1));
   } catch (err) {
+    if (err.needsPasscode) {
+      askForPasscode();
+      return;
+    }
     console.error(err);
     main.innerHTML = `<div class="card notice notice--error">${esc(err.message || 'Something went wrong.')}
       Please go back and try again.</div>`;
   }
+}
+
+/** Ask for the staff passcode, then show the screen that needed it. */
+function askForPasscode() {
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <form class="card form passcode-form" novalidate>
+      <h2>Staff passcode</h2>
+      <p class="hint">Enter the passcode from your UAAP supervisor. You only need to do this once on this device.</p>
+      ${fieldHtml({
+        name: 'passcode', label: 'Passcode', required: true,
+        control: '<input id="f-passcode" name="passcode" type="password" autocomplete="current-password">',
+      })}
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Continue</button>
+      </div>
+    </form>`;
+  const form = main.querySelector('form');
+  form.querySelector('input').focus();
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const { passcode } = readForm(form);
+    if (!showErrors(form, checkRequired({ passcode }, { passcode: 'the passcode' }))) return;
+    Store.setPasscode(passcode);
+    render();
+  });
 }
 
 window.addEventListener('hashchange', render);

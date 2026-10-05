@@ -5,15 +5,20 @@
  * (Extensions → Apps Script), run `setup` once, then deploy as a Web app.
  * See README.md → "Google Sheets setup".
  *
- * The app talks to this script only through:
- *   GET  ?table=masterlist|food|parking        → { ok, rows }
- *   POST { action: 'add', table, data }        → { ok, record }
- *   POST { action: 'updatePerson', id, data }  → { ok, record }
- *   POST { action: 'checkOut', id, timeOut }   → { ok, record }
+ * The app talks to this script only through POST requests (JSON body):
+ *   { action: 'list', table }                 → { ok, rows }
+ *   { action: 'add', table, data }            → { ok, record }
+ *   { action: 'updatePerson', id, data }      → { ok, record }
+ *   { action: 'checkOut', id, timeOut }       → { ok, record }
+ *   { action: 'delete', table, id }           → { ok, deleted }
+ * table is masterlist | food | parking. Every request also sends `passcode`.
+ *
+ * STAFF PASSCODE: in the Apps Script editor, open Project Settings (gear) →
+ * Script Properties → add STAFF_PASSCODE. When it is set, every request must
+ * include it. When it is not set, anyone with the web app URL has full access.
  *
  * Rules enforced here, so they hold even if someone bypasses the app:
- *  - Nothing can be deleted.
- *  - Food and parking records can't be edited after saving.
+ *  - Food and parking records can't be edited after saving (only deleted).
  *  - Check Out only fills a blank Time Out on the same parking record.
  */
 
@@ -49,19 +54,26 @@ function setup() {
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
 }
 
-function doGet(e) {
-  return respond(() => ({ rows: readRows(tableFor(e.parameter.table)) }));
+function doGet() {
+  return respond(() => ({ message: 'UAAP Centralized System backend is running.' }));
 }
 
 function doPost(e) {
   return respond(() => {
     const body = JSON.parse(e.postData.contents);
+    const passcode = PropertiesService.getScriptProperties().getProperty('STAFF_PASSCODE');
+    if (passcode && body.passcode !== passcode) {
+      return { ok: false, code: 'passcode', error: 'Wrong or missing staff passcode.' };
+    }
+    if (body.action === 'list') return { rows: readRows(tableFor(body.table)) };
+
     const lock = LockService.getScriptLock();
-    lock.waitLock(20000); // one save at a time, so IDs never collide
+    lock.waitLock(20000); // one save at a time, so IDs and row numbers never collide
     try {
       if (body.action === 'add') return { record: addRow(tableFor(body.table), body.data) };
       if (body.action === 'updatePerson') return { record: updatePerson(body.id, body.data) };
       if (body.action === 'checkOut') return { record: checkOut(body.id, body.timeOut) };
+      if (body.action === 'delete') return { deleted: deleteRow(tableFor(body.table), body.id) };
       throw new Error('Unknown action: ' + body.action);
     } finally {
       lock.releaseLock();
@@ -133,11 +145,15 @@ function writeRow(t, rowNumber, record) {
   sheet.getRange(rowNumber, 1, 1, values.length).setNumberFormat('@').setValues([values]);
 }
 
+/** Next ID like "F-0010". Remembers the highest ID ever issued, so deleted IDs are never reused. */
 function nextId(t) {
+  const props = PropertiesService.getScriptProperties();
+  const key = 'lastId:' + t.tab;
   const max = readRows(t).reduce((highest, r) => {
     const n = parseInt(String(r[t.idField]).split('-')[1], 10);
     return isNaN(n) ? highest : Math.max(highest, n);
-  }, 0);
+  }, Number(props.getProperty(key)) || 0);
+  props.setProperty(key, String(max + 1));
   return t.idPrefix + '-' + ('000' + (max + 1)).slice(-4);
 }
 
@@ -157,6 +173,13 @@ function updatePerson(id, data) {
   const record = Object.assign(current, data, { personId: id });
   writeRow(t, row, record);
   return record;
+}
+
+function deleteRow(t, id) {
+  const row = findRow(t, id);
+  if (row === -1) throw new Error('This record could not be found. It may already be deleted.');
+  sheetFor(t).deleteRow(row);
+  return id;
 }
 
 function checkOut(id, timeOut) {

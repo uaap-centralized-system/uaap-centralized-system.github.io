@@ -56,8 +56,8 @@ Dates are stored as `YYYY-MM-DD` and times as 24-hour `HH:MM`. IDs look like `P-
 ### Rules built into the prototype
 
 - One food row = one pickup by one representative for their whole team. Quantity is the team's total pieces.
-- Food and parking records can't be deleted.
-- A parking record can't be edited after saving. The only change allowed is Check Out, which sets Time Out **on the same record**.
+- Any record can be deleted from the app, after a confirmation: people from their Edit screen, food entries from the Food Summary, parking records from Today's Parking Log. Deleted IDs are never reused.
+- Food and parking records can't be edited after saving. The only change to a parking record is Check Out, which sets Time Out **on the same record**.
 - Vehicle Out lists only vehicles with a blank Time Out. A plate that's already parked can't be checked in again.
 
 These rules are enforced in the screens, in `js/store.js`, and on the Google Sheets side in `Code.gs`.
@@ -74,18 +74,19 @@ The Sheet is connected through a small Google Apps Script web app, [`google-apps
 1. Create a new Google Sheet, e.g. "UAAP Centralized System Data".
 2. In the Sheet, open **Extensions → Apps Script**. Delete the starter code and paste in all of `google-apps-script/Code.gs`. Save.
 3. Pick **setup** in the function dropdown at the top and click **Run**. Google asks you to authorize the script: choose your account, then **Advanced → Go to (project name) → Allow**. This creates the `Masterlist`, `Food` and `Parking` tabs.
-4. Click **Deploy → New deployment**. Choose type **Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and copy the **Web app URL**.
-5. Copy `js/config.example.js` to `js/config.js` and paste the URL into `sheetsUrl`.
-6. Reload the app. The Home screen should say "Records are saved to the shared Google Sheet."
+4. Set a staff passcode: click **Project Settings** (gear icon) → **Script Properties** → **Add script property**. Name it `STAFF_PASSCODE` and set any value you like. Staff type it once per device.
+5. Click **Deploy → New deployment**. Choose type **Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**. Click **Deploy** and copy the **Web app URL**.
+6. Copy `js/config.example.js` to `js/config.js` and paste the URL into `sheetsUrl`.
+7. Reload the app. The Home screen should say "Records are saved to the shared Google Sheet."
 
 **If you change `Code.gs` later:** paste the new version, then **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.
 
-**Security note:** with "Anyone" access, whoever has the web app URL can read and add records, but not delete them. Only share the URL (and `js/config.js`) with UAAP staff. That's why `js/config.js` is not committed to git. Real staff logins are listed under future improvements.
+**Security note:** the web app URL is visible to anyone who opens the app, so the **staff passcode is what protects the data**. Without `STAFF_PASSCODE` set, anyone who finds the URL can read, add and delete records. To change the passcode, edit the script property; staff will be asked for the new one automatically. Individual staff logins are listed under future improvements.
 
 ### How the pieces fit
 
 - `js/store.js` is the only file that talks to the data. It picks Google Sheets or the browser from `js/config.js`. The screens never know which one is in use.
-- `Code.gs` enforces the same rules as the app: no deletes, food and parking records can't be edited, and Check Out only fills a blank Time Out. These rules hold even if someone calls the URL directly.
+- `Code.gs` checks the passcode and enforces the same rules as the app: food and parking records can't be edited, and Check Out only fills a blank Time Out. These rules hold even if someone calls the URL directly.
 - All Sheet cells are stored as plain text, so Sheets never turns `2026-10` or `08:30` into dates.
 - You can read the Sheet freely, but avoid editing it by hand while staff are using the app, and keep the header row exactly as it is.
 
@@ -99,12 +100,13 @@ The Sheet is connected through a small Google Apps Script web app, [`google-apps
 - Compiled Food Form: one signature box (finger or mouse) and a **Print Form** button
 - Parking: Vehicle In (time defaults to now), Vehicle Out cards with Check Out, today's parking log
 - Works on phones, tablets and desktops. Sample data included.
-- Optional Google Sheets backend so all staff share the same records
+- Optional Google Sheets backend so all staff share the same records, protected by a staff passcode
+- Delete for all three modules, with confirmation
 
 **Future improvements**
 - Staff login and roles (e.g. only Masterlist staff can edit the Masterlist)
+- Individual staff logins and an audit trail instead of one shared passcode
 - Saving the food signature with the form, instead of only printing it
 - Export to Excel/PDF and month-end reports
 - Importing the monthly Masterlist from the existing spreadsheet
 - Linking food and parking entries to Masterlist IDs
-- Audit trail (who changed what, and when)

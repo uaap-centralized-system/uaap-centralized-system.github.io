@@ -143,7 +143,7 @@ Screens.foodSummary = async function (el) {
     const total = rows.reduce((s, r) => s + Number(r.quantity), 0);
     const showDate = !f.date;
     const showSport = !f.sport;
-    const colCount = 7 + (showDate ? 1 : 0) + (showSport ? 1 : 0);
+    const colCount = 8 + (showDate ? 1 : 0) + (showSport ? 1 : 0);
 
     body.innerHTML = `
       <div class="stats">
@@ -171,6 +171,7 @@ Screens.foodSummary = async function (el) {
               ${showSport ? '<th>Sport</th>' : ''}
               <th>Department</th><th>Representative</th><th>Meal</th>
               <th class="num">Qty</th><th>Admin Staff</th><th>Notes</th>
+              <th class="no-print"><span class="sr-only">Delete</span></th>
             </tr>
           </thead>
           <tbody>
@@ -185,15 +186,19 @@ Screens.foodSummary = async function (el) {
                 <td data-label="Qty" class="num"><strong>${esc(r.quantity)}</strong></td>
                 <td data-label="Admin Staff">${esc(r.adminStaff)}</td>
                 <td data-label="Notes">${esc(r.notes) || '<span class="muted">—</span>'}</td>
+                <td class="cell-action no-print">
+                  <button type="button" class="btn btn-danger-outline btn-small" data-delete="${esc(r.foodRecordId)}">Delete</button>
+                </td>
               </tr>`).join('')
             : `<tr><td colspan="${colCount}" class="empty">No food recorded for this date and sport.</td></tr>`}
           </tbody>
           ${rows.length ? `
           <tfoot>
             <tr>
-              <td colspan="${colCount - 3}" class="tfoot-label">Total pieces</td>
+              <td colspan="${colCount - 4}" class="tfoot-label">Total pieces</td>
               <td class="num"><strong>${total}</strong></td>
               <td colspan="2"></td>
+              <td class="no-print"></td>
             </tr>
           </tfoot>` : ''}
         </table>
@@ -221,6 +226,18 @@ Screens.foodSummary = async function (el) {
     body.querySelector('#fs-clear').addEventListener('click', pad.clear);
     body.querySelector('#fs-print').addEventListener('click', () => window.print());
   }
+
+  body.addEventListener('click', async (e) => {
+    const button = e.target.closest('button[data-delete]');
+    if (!button) return;
+    const r = all.find((x) => x.foodRecordId === button.dataset.delete);
+    if (!confirm(`Delete this entry? ${r.quantity} ${r.meal} for ${r.department} (${r.representativeName}). This can't be undone.`)) return;
+    const done = await withSaving(button, () => Store.deleteFood(r.foodRecordId).then(() => true));
+    if (!done) return;
+    all.splice(all.indexOf(r), 1);
+    toast('Food entry deleted.');
+    update();
+  });
 
   dateInput.addEventListener('change', update);
   sportSelect.addEventListener('change', update);

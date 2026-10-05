@@ -98,6 +98,7 @@ const ICON_PATHS = {
   logIn: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/>',
   logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
   print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
 };
 
@@ -150,6 +151,10 @@ async function withSaving(button, work) {
   try {
     return await work();
   } catch (err) {
+    if (err.needsPasscode) {
+      askForPasscode();
+      return null;
+    }
     console.error(err);
     toast(err.message || 'Could not save. Please try again.');
     button.disabled = false;
