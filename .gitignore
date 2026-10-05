@@ -1,0 +1,8 @@
+.DS_Store
+
+# Machine-specific editor/preview settings
+.claude/
+
+# Holds the Google Sheets web app URL, which gives write access to the Sheet.
+# Copy js/config.example.js to js/config.js to set it up.
+js/config.js
