@@ -38,6 +38,7 @@ async function render() {
   window.scrollTo(0, 0);
   try {
     await route.screen(main, ...path.match(route.pattern).slice(1));
+    passcodeJustEntered = false;
   } catch (err) {
     if (err.needsPasscode) {
       askForPasscode();
@@ -48,6 +49,9 @@ async function render() {
       Please go back and try again.</div>`;
   }
 }
+
+// True right after staff submit a passcode, so a refusal can say it was wrong.
+let passcodeJustEntered = false;
 
 /** Ask for the staff passcode, then show the screen that needed it. */
 function askForPasscode() {
@@ -65,12 +69,17 @@ function askForPasscode() {
       </div>
     </form>`;
   const form = main.querySelector('form');
+  if (passcodeJustEntered) showErrors(form, { passcode: "That passcode didn't work. Please check it and try again." });
+  passcodeJustEntered = false;
   form.querySelector('input').focus();
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const { passcode } = readForm(form);
     if (!showErrors(form, checkRequired({ passcode }, { passcode: 'the passcode' }))) return;
     Store.setPasscode(passcode);
+    passcodeJustEntered = true;
+    form.querySelector('[type=submit]').disabled = true;
+    form.querySelector('[type=submit]').textContent = 'Checking…';
     render();
   });
 }
