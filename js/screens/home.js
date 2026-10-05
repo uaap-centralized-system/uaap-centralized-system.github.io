@@ -20,6 +20,11 @@ Screens.home = function (el) {
           <span class="tile-title">Parking</span>
           <span class="tile-sub">Vehicle in and vehicle out</span>
         </a>
+        <a class="tile tile--consent" href="#/consents">
+          <span class="tile-icon">${icon('consent')}</span>
+          <span class="tile-title">Consent Forms</span>
+          <span class="tile-sub">Minors cleared by a parent to enter</span>
+        </a>
       </div>
       <p class="demo-note">
         ${Store.usingSheets

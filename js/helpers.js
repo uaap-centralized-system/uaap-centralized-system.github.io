@@ -50,6 +50,14 @@ function formatTime(hhmm) {
   return `${h % 12 || 12}:${pad2(m)} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
+/** ISO timestamp → "Oct 5, 2026, 2:15 PM" in local time. */
+function formatDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${formatDate(toISODate(d))}, ${formatTime(`${pad2(d.getHours())}:${pad2(d.getMinutes())}`)}`;
+}
+
 function plural(n, one, many) {
   return `${n} ${n === 1 ? one : (many || one + 's')}`;
 }
@@ -98,6 +106,7 @@ const ICON_PATHS = {
   logIn: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/>',
   logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
+  consent: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 14l2 2 4-4"/>',
   trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
   print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
 };
@@ -184,6 +193,72 @@ async function withSaving(button, work) {
     button.innerHTML = label;
     return null;
   }
+}
+
+// ---------- Signatures ----------
+
+/**
+ * Draw-with-finger/mouse signature box on a <canvas>.
+ * Returns { clear(), isEmpty(), toImage() }. toImage() gives a small PNG data URL.
+ */
+function signaturePad(canvas) {
+  const ctx = canvas.getContext('2d');
+  const ratio = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * ratio;
+  canvas.height = rect.height * ratio;
+  ctx.scale(ratio, ratio);
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#111827';
+
+  let drawing = false;
+  let hasInk = false;
+  const point = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    drawing = true;
+    hasInk = true;
+    canvas.setPointerCapture(e.pointerId);
+    const p = point(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.1, p.y + 0.1);
+    ctx.stroke();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing) return;
+    const p = point(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  const stop = () => { drawing = false; };
+  canvas.addEventListener('pointerup', stop);
+  canvas.addEventListener('pointercancel', stop);
+
+  return {
+    clear() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      hasInk = false;
+    },
+    isEmpty: () => !hasInk,
+    /** The signature as a PNG data URL, scaled down so it fits in one spreadsheet cell. */
+    toImage() {
+      const out = document.createElement('canvas');
+      out.width = 500;
+      out.height = Math.round(500 * (canvas.height / canvas.width));
+      out.getContext('2d').drawImage(canvas, 0, 0, out.width, out.height);
+      return out.toDataURL('image/png');
+    },
+  };
 }
 
 // ---------- Messages ----------

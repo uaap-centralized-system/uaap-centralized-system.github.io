@@ -14,6 +14,7 @@ const Store = (function () {
     masterlist: { idField: 'personId', idPrefix: 'P' },
     food: { idField: 'foodRecordId', idPrefix: 'F' },
     parking: { idField: 'parkingRecordId', idPrefix: 'PK' },
+    consent: { idField: 'consentId', idPrefix: 'C' },
   };
   const sheetsUrl = ((window.UAAP_CONFIG || {}).sheetsUrl || '').trim();
 
@@ -77,6 +78,10 @@ const Store = (function () {
       },
       async remove(table, id) {
         await post({ action: 'delete', table, id });
+      },
+      /** Public: works without the staff passcode, and can only add. */
+      async submitConsent(data) {
+        return (await post({ action: 'submitConsent', data })).record;
       },
     };
   }
@@ -163,6 +168,10 @@ const Store = (function () {
         rows.splice(i, 1);
         writeTable(table);
       },
+      async submitConsent({ website, ...data }) {
+        const { consentId, gameDate, childName } = await this.add('consent', { ...data, submittedAt: new Date().toISOString() });
+        return { consentId, gameDate, childName };
+      },
       async reset() {
         Object.keys(TABLES).forEach((table) => {
           delete cache[table];
@@ -200,6 +209,15 @@ const Store = (function () {
     /** Sets Time Out on the same record. Nothing else can be changed. */
     checkOutVehicle: (parkingRecordId, timeOut) => backend.checkOut(parkingRecordId, timeOut),
     deleteParking: (parkingRecordId) => backend.remove('parking', parkingRecordId),
+
+    // Consent forms
+    listConsents: () => backend.list('consent'),
+    async getConsent(consentId) {
+      return (await backend.list('consent')).find((c) => c.consentId === consentId) || null;
+    },
+    /** Parents submit through this; it needs no passcode. */
+    submitConsent: (data) => backend.submitConsent(data),
+    deleteConsent: (consentId) => backend.remove('consent', consentId),
 
     /** Remember the staff passcode on this device. */
     setPasscode: (value) => Passcode.set(value),

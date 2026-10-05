@@ -1,10 +1,11 @@
 # UAAP Centralized System (MVP prototype)
 
-A simple web app that brings three manual UAAP workflows into one place:
+A simple web app that brings manual UAAP workflows into one place:
 
 - **Masterlist**: the reference list of personnel, by sport and month
 - **Food**: one entry per food pickup by a team representative, plus a compiled form with one signature
 - **Parking**: Vehicle In / Vehicle Out log
+- **Consent Forms**: parents fill out the venue consent form for minors online; staff see who is cleared for each game date
 
 It's built for non-technical staff: big buttons, plain labels, few screens, and it works on phones.
 
@@ -37,6 +38,18 @@ Every push to `main` republishes the site automatically (see `.github/workflows/
 
 The Sheet link is visible to anyone who opens the site, so **set `STAFF_PASSCODE` in Apps Script before adding `SHEETS_URL`**.
 
+## Consent forms (parent-facing)
+
+Parents use a separate link that needs no passcode: **https://uaap-centralized-system.github.io/#/consent**
+(staff can copy it from the Consent Forms screen). It shows only the form, with no staff menus.
+
+- One form per child. Parents enter the game date, the child's name and age, how the child is related to them, and their own name, then tick to agree and sign with a finger.
+- After submitting they get a reference number (e.g. `C-0012`) they can screenshot. "Fill out a form for another child" keeps their name and the date filled in.
+- Staff open **Consent Forms** to see the children cleared for a game date (today by default), search by name, and open any form. It's laid out like the paper "Security Office Copy" with the signature, and can be printed or deleted.
+- The event name, venue, liability wording and relationship choices are in `CONSENT_FORM` in `js/sample-data.js`. Each submitted form keeps the event and venue it was signed for.
+
+**Privacy and safety:** the public link can only *add* a form. Reading forms needs the staff passcode. `Code.gs` checks every field, limits submissions to 60 per minute, ignores bots that fill a hidden field, and stores text so it can't run as a spreadsheet formula. Signatures are stored as small images in the `Consent` tab.
+
 ## App structure
 
 ```
@@ -49,7 +62,8 @@ js/store.js              DATA LAYER: every read/write goes through here (Sheets 
 js/screens/home.js       Home: Masterlist / Food / Parking
 js/screens/masterlist.js Search, filters, Add / Edit person
 js/screens/food.js       Food menu, New Food Entry, Food Summary + Compiled Food Form
-js/screens/parking.js    Parking menu + today's log, Vehicle In, Vehicle Out
+js/screens/parking.js    Parking menu + log by date, Vehicle In, Vehicle Out
+js/screens/consent.js    Parent consent form (public), staff list and form view
 js/app.js                Router: which screen shows for each address (#/food/new, etc.)
 google-apps-script/Code.gs  Backend that runs inside the Google Sheet
 ```
@@ -63,6 +77,7 @@ To **change dropdown choices** (add a sport, department or staff member), edit `
 | Masterlist | personId, fullName, organization, sport, period (`YYYY-MM`), active |
 | Food records | foodRecordId, date, sport, department, representativeName, meal, quantity, adminStaff, notes |
 | Parking records | parkingRecordId, date, name, plateNumber, timeIn, timeOut, adminStaff, notes |
+| Consent | consentId, submittedAt, gameDate, childName, childAge, relationship, guardianName, eventName, venue, agreed, signature |
 
 Dates are stored as `YYYY-MM-DD` and times as 24-hour `HH:MM`. IDs look like `P-0001`, `F-0001`, `PK-0001`.
 
@@ -115,7 +130,8 @@ The Sheet is connected through a small Google Apps Script web app, [`google-apps
 - Screens open on today's data (Food Summary, Parking Log) or the current month (Masterlist), with a date picker and a Today button
 - Works on phones, tablets and desktops. Sample data included.
 - Optional Google Sheets backend so all staff share the same records, protected by a staff passcode
-- Delete for all three modules, with confirmation
+- Delete for all modules, with confirmation
+- Parent consent form with signature, plus a staff list by game date and a printable form view
 
 **Future improvements**
 - Staff login and roles (e.g. only Masterlist staff can edit the Masterlist)

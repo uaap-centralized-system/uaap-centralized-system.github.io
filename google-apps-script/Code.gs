@@ -11,7 +11,11 @@
  *   { action: 'updatePerson', id, data }      → { ok, record }
  *   { action: 'checkOut', id, timeOut }       → { ok, record }
  *   { action: 'delete', table, id }           → { ok, deleted }
- * table is masterlist | food | parking. Every request also sends `passcode`.
+ *   { action: 'submitConsent', data }         → { ok, record }   ← public, no passcode
+ * table is masterlist | food | parking | consent. Requests also send `passcode`.
+ *
+ * submitConsent is the ONLY thing that works without the passcode: parents use it
+ * to send a consent form. It can only add one form; it can never read anything.
  *
  * STAFF PASSCODE: in the Apps Script editor, open Project Settings (gear) →
  * Script Properties → add STAFF_PASSCODE. When it is set, every request must
@@ -37,21 +41,32 @@ const TABLES = {
     columns: ['parkingRecordId', 'date', 'name', 'plateNumber', 'timeIn', 'timeOut',
       'adminStaff', 'notes'],
   },
+  consent: {
+    tab: 'Consent', idField: 'consentId', idPrefix: 'C',
+    columns: ['consentId', 'submittedAt', 'gameDate', 'childName', 'childAge', 'relationship',
+      'guardianName', 'eventName', 'venue', 'agreed', 'signature'],
+  },
 };
 
-/** Run once from the editor: creates the three tabs with headers. Safe to run again. */
+const BOOLEAN_COLUMNS = ['active', 'agreed'];
+const MAX_CONSENTS_PER_MINUTE = 60;
+
+/** Run once from the editor: creates all tabs with headers. Safe to run again. */
 function setup() {
   const ss = SpreadsheetApp.getActive();
-  Object.keys(TABLES).forEach((key) => {
-    const t = TABLES[key];
-    const sheet = ss.getSheetByName(t.tab) || ss.insertSheet(t.tab);
-    // Plain text everywhere, so Sheets never turns "2026-10" or "08:30" into dates/times.
-    sheet.getRange(1, 1, sheet.getMaxRows(), t.columns.length).setNumberFormat('@');
-    sheet.getRange(1, 1, 1, t.columns.length).setValues([t.columns]).setFontWeight('bold');
-    sheet.setFrozenRows(1);
-  });
+  Object.keys(TABLES).forEach((key) => createTab(TABLES[key]));
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
+}
+
+function createTab(t) {
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName(t.tab) || ss.insertSheet(t.tab);
+  // Plain text everywhere, so Sheets never turns "2026-10" or "08:30" into dates/times.
+  sheet.getRange(1, 1, sheet.getMaxRows(), t.columns.length).setNumberFormat('@');
+  sheet.getRange(1, 1, 1, t.columns.length).setValues([t.columns]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  return sheet;
 }
 
 function doGet() {
@@ -61,6 +76,8 @@ function doGet() {
 function doPost(e) {
   return respond(() => {
     const body = JSON.parse(e.postData.contents);
+    if (body.action === 'submitConsent') return { record: submitConsent(body.data || {}) };
+
     const passcode = PropertiesService.getScriptProperties().getProperty('STAFF_PASSCODE');
     if (passcode && body.passcode !== passcode) {
       return { ok: false, code: 'passcode', error: 'Wrong or missing staff passcode.' };
@@ -101,16 +118,16 @@ function tableFor(name) {
 }
 
 function sheetFor(t) {
-  const sheet = SpreadsheetApp.getActive().getSheetByName(t.tab);
-  if (!sheet) throw new Error('Missing "' + t.tab + '" tab. Run setup() in the Apps Script editor.');
-  return sheet;
+  return SpreadsheetApp.getActive().getSheetByName(t.tab) || createTab(t);
 }
 
 /** Turn a row of cell text into a record with the right types. */
 function toRecord(t, values) {
   const record = {};
   t.columns.forEach((col, i) => { record[col] = values[i]; });
-  if ('active' in record) record.active = String(record.active).toUpperCase() === 'TRUE';
+  BOOLEAN_COLUMNS.forEach((col) => {
+    if (col in record) record[col] = String(record[col]).toUpperCase() === 'TRUE';
+  });
   if ('quantity' in record) record.quantity = Number(record.quantity) || 0;
   return record;
 }
@@ -140,7 +157,10 @@ function writeRow(t, rowNumber, record) {
   const values = t.columns.map((col) => {
     const v = record[col];
     if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
-    return v === undefined || v === null ? '' : String(v);
+    const text = v === undefined || v === null ? '' : String(v);
+    // A leading ' stops Sheets from running typed text like "=IMPORTXML(...)" as a formula.
+    // It isn't shown or read back; getDisplayValues() returns the original text.
+    return /^[=+\-@]/.test(text) ? "'" + text : text;
   });
   sheet.getRange(rowNumber, 1, 1, values.length).setNumberFormat('@').setValues([values]);
 }
@@ -180,6 +200,52 @@ function deleteRow(t, id) {
   if (row === -1) throw new Error('This record could not be found. It may already be deleted.');
   sheetFor(t).deleteRow(row);
   return id;
+}
+
+/** Public: a parent submits one consent form. Validates everything, since anyone can call this. */
+function submitConsent(data) {
+  if (data.website) throw new Error('Submission rejected.'); // hidden field only bots fill in
+  const text = (v, max) => String(v === undefined || v === null ? '' : v).trim().slice(0, max);
+  const record = {
+    gameDate: text(data.gameDate, 10),
+    childName: text(data.childName, 100),
+    childAge: text(data.childAge, 3),
+    relationship: text(data.relationship, 40),
+    guardianName: text(data.guardianName, 100),
+    eventName: text(data.eventName, 150),
+    venue: text(data.venue, 150),
+    agreed: data.agreed === true,
+    signature: String(data.signature || ''),
+  };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(record.gameDate)) throw new Error('Please choose the game date.');
+  ['childName', 'relationship', 'guardianName', 'eventName', 'venue'].forEach((key) => {
+    if (!record[key]) throw new Error('Please fill in all required fields.');
+  });
+  if (!/^\d{1,2}$/.test(record.childAge)) throw new Error("Please enter the child's age in years.");
+  if (!record.agreed) throw new Error('Please tick the box to agree to the statement.');
+  if (!/^data:image\/png;base64,[A-Za-z0-9+\/=]+$/.test(record.signature) || record.signature.length > 45000) {
+    throw new Error('Please sign the form again.');
+  }
+
+  // Simple flood protection: at most MAX_CONSENTS_PER_MINUTE forms per minute overall.
+  const cache = CacheService.getScriptCache();
+  const bucket = 'consents:' + Math.floor(Date.now() / 60000);
+  const count = Number(cache.get(bucket)) || 0;
+  if (count >= MAX_CONSENTS_PER_MINUTE) {
+    throw new Error('Many forms are being sent right now. Please wait a minute and try again.');
+  }
+  cache.put(bucket, String(count + 1), 120);
+
+  record.submittedAt = new Date().toISOString();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const saved = addRow(TABLES.consent, record);
+    // Send back only what the confirmation screen shows; never the stored data.
+    return { consentId: saved.consentId, gameDate: saved.gameDate, childName: saved.childName };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function checkOut(id, timeOut) {

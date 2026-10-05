@@ -18,6 +18,19 @@ const OPTIONS = {
   meals: ['Breakfast', 'Lunch', 'Dinner'],
 };
 
+/*
+ * Parent consent form wording. Change these when the event or venue changes;
+ * each submitted form keeps the event and venue it was signed for.
+ */
+const CONSENT_FORM = {
+  eventName: 'UAAP Season 88 Volleyball Men & Women',
+  venue: 'Quadricentennial Pavilion Building',
+  liability: 'It is with the understanding that the UST and the UAAP Committee are not liable '
+    + 'for any untoward incident that may occur during the event.',
+  relationships: ['Son', 'Daughter', 'Grandson', 'Granddaughter', 'Nephew', 'Niece',
+    'Brother', 'Sister', 'Ward', 'Other relative'],
+};
+
 const SAMPLE_DATA = (function () {
   const now = new Date();
   const daysAgo = (n) => {
@@ -35,6 +48,12 @@ const SAMPLE_DATA = (function () {
 
   const food = (foodRecordId, date, sport, department, representativeName, meal, quantity, notes = '') =>
     ({ foodRecordId, date, sport, department, representativeName, meal, quantity, adminStaff: 'Food Staff 1', notes });
+
+  const consent = (consentId, gameDate, childName, childAge, relationship, guardianName) => ({
+    consentId, gameDate, childName, childAge, relationship, guardianName,
+    eventName: CONSENT_FORM.eventName, venue: CONSENT_FORM.venue,
+    signature: '', agreed: true, submittedAt: new Date(now.getTime() - 86400000).toISOString(),
+  });
 
   const parking = (parkingRecordId, date, name, plateNumber, timeIn, timeOut, notes = '') =>
     ({ parkingRecordId, date, name, plateNumber, timeIn, timeOut, adminStaff: 'Parking Staff 1', notes });
@@ -74,6 +93,13 @@ const SAMPLE_DATA = (function () {
       parking('PK-0004', today, 'Maria Halimbawa', 'DAQ 9012', '08:30', ''),
       parking('PK-0005', today, 'Ana Testing', 'NBC 3456', '09:10', '', 'Media van'),
       parking('PK-0006', today, 'Carlo Example', 'TUV 7788', '10:05', ''),
+    ],
+
+    consent: [
+      consent('C-0001', today, 'Miguel Sample', '12', 'Son', 'Rosa Sample'),
+      consent('C-0002', today, 'Bianca Halimbawa', '15', 'Daughter', 'Maria Halimbawa'),
+      consent('C-0003', today, 'Paolo Demo', '9', 'Nephew', 'Liza Demo'),
+      consent('C-0004', yesterday, 'Sofia Example', '14', 'Granddaughter', 'Carlo Example'),
     ],
   };
 })();

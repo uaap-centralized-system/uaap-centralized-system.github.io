@@ -2,6 +2,7 @@
  * Router: shows the right screen for the address after "#".
  * e.g. index.html#/food/new → New Food Entry.
  * `back` is where the Back button goes from each screen.
+ * `isPublic` screens are for parents: no staff navigation, no passcode.
  */
 const ROUTES = [
   { pattern: /^\/$/, title: 'Home', back: null, screen: Screens.home },
@@ -17,6 +18,12 @@ const ROUTES = [
   { pattern: /^\/parking$/, title: 'Parking', back: '#/', screen: Screens.parking },
   { pattern: /^\/parking\/in$/, title: 'Vehicle In', back: '#/parking', screen: Screens.vehicleIn },
   { pattern: /^\/parking\/out$/, title: 'Vehicle Out', back: '#/parking', screen: Screens.vehicleOut },
+
+  { pattern: /^\/consents$/, title: 'Consent Forms', back: '#/', screen: Screens.consents },
+  { pattern: /^\/consents\/([^/]+)$/, title: 'Consent Form', back: '#/consents', screen: Screens.consentDetail },
+
+  // Parent-facing
+  { pattern: /^\/consent$/, title: 'Consent Form', isPublic: true, screen: Screens.consentForm },
 ];
 
 async function render() {
@@ -28,10 +35,12 @@ async function render() {
   }
 
   const isHome = !route.back;
+  document.body.classList.toggle('is-public', Boolean(route.isPublic));
+  document.querySelector('.brand').setAttribute('href', route.isPublic ? '#/consent' : '#/');
   document.getElementById('page-bar').hidden = isHome;
   document.getElementById('back-button').href = route.back || '#/';
   document.getElementById('page-title').textContent = route.title;
-  document.title = isHome ? 'UAAP Centralized System' : `${route.title} · UAAP Centralized System`;
+  document.title = isHome && !route.isPublic ? 'UAAP Centralized System' : `${route.title} · UAAP Centralized System`;
 
   const main = document.getElementById('main');
   main.innerHTML = '<p class="loading">Loading…</p>';
